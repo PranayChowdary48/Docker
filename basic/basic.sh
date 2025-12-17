@@ -28,5 +28,7 @@ docker compose up --build
 docker network ls
 # inspect the network
 docker network inspect dasic_default  
+# cache invalidation
+docker exec -it mood-redis redis-cli TTL "mood:$(date +%Y-%m-%d)"
 # stop the container and delete volume
 docker compose down -v
