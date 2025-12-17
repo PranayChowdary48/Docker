@@ -20,7 +20,7 @@ It is designed as a **learning repository** for understanding Docker fundamental
 
 ## 🧱 Architecture Overview
 
-![Architecture](images/architecture.png)
+<img src="images/architecture.png" width="300">
 
 * Flask generates a **Mood of the Day**
 * Redis caches the mood for the current day
