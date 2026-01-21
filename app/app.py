@@ -3,8 +3,22 @@ import datetime
 import redis
 from flask import Flask, render_template, jsonify
 import socket
+from pythonjsonlogger import jsonlogger
+import logging
 
 app = Flask(__name__)
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+logHandler = logging.StreamHandler()
+formatter = jsonlogger.JsonFormatter(
+    '%(asctime)s %(levelname)s %(message)s %(container)s %(request_path)s'
+)
+logHandler.setFormatter(formatter)
+
+logger.handlers = []
+logger.addHandler(logHandler)
 
 # Redis connection
 redis_client = redis.Redis(
@@ -42,11 +56,24 @@ def mood_of_the_day():
         mood = cached["mood"]
         gif = cached["gif"]
         generated_at = cached["generated_at"]
+        cache_status = "HIT"
     else:
         mood, gif = random.choice(list(MOODS.items()))
         generated_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         redis_client.hset(redis_key, mapping={"mood": mood, "gif": gif, "generated_at": generated_at})
         redis_client.expire(redis_key, seconds_until_midnight())
+        cache_status = "MISS"
+    
+    logger.info(
+        "mood_generated",
+        extra={
+            "container": hostname,
+            "request_path": "/",
+            "redis_key": redis_key,
+            "cache_status": cache_status,
+            "mood": mood
+        }
+    )
 
     return render_template("index.html", mood=mood, gif=gif, generated_at=generated_at, hostname=hostname)
 
