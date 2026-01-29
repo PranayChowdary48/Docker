@@ -1,10 +1,48 @@
 import random
 import datetime
 import redis
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, Response, request
 import socket
+from pythonjsonlogger import jsonlogger
+import logging
+from prometheus_client import Counter, Histogram, generate_latest
 
 app = Flask(__name__)
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+logHandler = logging.StreamHandler()
+formatter = jsonlogger.JsonFormatter(
+    '%(asctime)s %(levelname)s %(message)s %(container)s %(request_path)s'
+)
+logHandler.setFormatter(formatter)
+
+logger.handlers = []
+logger.addHandler(logHandler)
+
+
+REQUEST_COUNT = Counter(
+    "http_requests_total",
+    "Total HTTP requests",
+    ["method", "path", "status"]
+)
+
+REQUEST_LATENCY = Histogram(
+    "http_request_latency_seconds",
+    "Request latency"
+)
+
+@app.after_request
+def record_metrics(response):
+    REQUEST_COUNT.labels(
+        request.method, request.path, response.status_code
+    ).inc()
+    return response
+
+@app.route("/metrics")
+def metrics():
+    return Response(generate_latest(), mimetype="text/plain")
 
 # Redis connection
 redis_client = redis.Redis(
@@ -42,11 +80,24 @@ def mood_of_the_day():
         mood = cached["mood"]
         gif = cached["gif"]
         generated_at = cached["generated_at"]
+        cache_status = "HIT"
     else:
         mood, gif = random.choice(list(MOODS.items()))
         generated_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         redis_client.hset(redis_key, mapping={"mood": mood, "gif": gif, "generated_at": generated_at})
         redis_client.expire(redis_key, seconds_until_midnight())
+        cache_status = "MISS"
+    
+    logger.info(
+        "mood_generated",
+        extra={
+            "container": hostname,
+            "request_path": "/",
+            "redis_key": redis_key,
+            "cache_status": cache_status,
+            "mood": mood
+        }
+    )
 
     return render_template("index.html", mood=mood, gif=gif, generated_at=generated_at, hostname=hostname)
 
@@ -75,6 +126,14 @@ def refresh_mood():
 @app.route("/whoami")
 def whoami():
     return socket.gethostname()
+
+@app.route("/health")
+def health():
+    try:
+        redis_client.ping()
+        return {"status": "ready"}, 200
+    except Exception:
+        return {"status": "not_ready"}, 503
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
