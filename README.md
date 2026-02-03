@@ -275,15 +275,5 @@ docker compose up -d --scale app=3
 
 ---
 
-## Operational notes
-- Rebuild after app changes:
-```
-docker compose up -d --build
-```
-- Scale without host port collisions: keep `app` internal.
-- Dashboard import: Grafana -> + -> Import -> JSON file.
-
----
-
 ## One-line takeaway
 This repo is the Docker chapter of a DevOps series: it intentionally keeps Docker-only limitations visible before the **Kubernetes** and **AWS** follow-ups (https://github.com/example/mood-of-the-day-k8s).
